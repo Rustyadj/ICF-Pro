@@ -1,0 +1,340 @@
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Calculator, 
+  Clock, 
+  Layers, 
+  Box, 
+  Droplets, 
+  TrendingUp, 
+  Info,
+  ChevronRight,
+  Home,
+  Construction
+} from 'lucide-react';
+
+// Constants for ICF (Standard 16" x 48" blocks)
+const BLOCK_HEIGHT_FT = 1.333; // 16 inches
+const BLOCK_LENGTH_FT = 4;     // 48 inches
+const SQFT_PER_BLOCK = BLOCK_HEIGHT_FT * BLOCK_LENGTH_FT; // 5.333 sqft
+
+const CORE_THICKNESS_MAP = {
+  '6': 6 / 12, // 0.5 ft
+  '8': 8 / 12, // 0.667 ft
+  '10': 10 / 12, // 0.833 ft
+};
+
+export default function App() {
+  // Inputs
+  const [length, setLength] = useState<number>(100);
+  const [height, setHeight] = useState<number>(10);
+  const [coreSize, setCoreSize] = useState<'6' | '8' | '10'>('8');
+  const [progress, setProgress] = useState<number>(0);
+
+  // Calculations
+  const takeoff = useMemo(() => {
+    const wallArea = length * height;
+    const blockCount = Math.ceil(wallArea / SQFT_PER_BLOCK);
+    const concreteVolumeCuFt = wallArea * CORE_THICKNESS_MAP[coreSize];
+    const concreteVolumeCuYd = concreteVolumeCuFt / 27;
+    
+    // Rough rebar estimate: horizontal every 16", vertical every 16"
+    const horizontalRuns = Math.ceil(height / BLOCK_HEIGHT_FT);
+    const verticalRuns = Math.ceil(length / 1.333); // every 16 inches
+    const totalRebarFt = (horizontalRuns * length) + (verticalRuns * height);
+
+    return {
+      wallArea,
+      blockCount,
+      concreteVolumeCuYd,
+      totalRebarFt
+    };
+  }, [length, height, coreSize]);
+
+  // Timelapse Stage Logic
+  const getStage = (p: number) => {
+    if (p < 10) return { label: 'Excavation & Footings', color: 'bg-amber-900' };
+    if (p < 30) return { label: 'First Course & Bracing', color: 'bg-zinc-700' };
+    if (p < 60) return { label: 'Wall Stacking', color: 'bg-zinc-600' };
+    if (p < 80) return { label: 'Rebar & Final Bracing', color: 'bg-zinc-500' };
+    if (p < 95) return { label: 'Concrete Pour', color: 'bg-zinc-400' };
+    return { label: 'Curing & Finished Walls', color: 'bg-zinc-300' };
+  };
+
+  const currentStage = getStage(progress);
+
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row bg-zinc-950 overflow-hidden">
+      {/* Left Panel: Inputs & Takeoff */}
+      <div className="w-full lg:w-96 bg-zinc-900 border-r border-zinc-800 p-6 flex flex-col gap-8 overflow-y-auto">
+        <header className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-500/10 rounded-lg">
+            <Calculator className="w-6 h-6 text-emerald-500" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">ICF Takeoff</h1>
+            <p className="text-xs text-zinc-500 uppercase tracking-widest font-semibold">Quantity Estimator</p>
+          </div>
+        </header>
+
+        <section className="space-y-6">
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-zinc-400">Wall Dimensions</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-500">Length (ft)</span>
+                <input 
+                  type="number" 
+                  value={length}
+                  onChange={(e) => setLength(Number(e.target.value))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-500">Height (ft)</span>
+                <input 
+                  type="number" 
+                  value={height}
+                  onChange={(e) => setHeight(Number(e.target.value))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-zinc-400">Core Thickness</label>
+            <div className="flex gap-2">
+              {['6', '8', '10'].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setCoreSize(size as any)}
+                  className={`flex-1 py-2 rounded-lg border transition-all ${
+                    coreSize === size 
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' 
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                  }`}
+                >
+                  {size}"
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="h-px bg-zinc-800" />
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Estimates</h2>
+          <div className="grid gap-3">
+            <EstimateCard 
+              icon={<Layers className="w-4 h-4" />} 
+              label="ICF Blocks" 
+              value={takeoff.blockCount.toLocaleString()} 
+              unit="Blocks"
+            />
+            <EstimateCard 
+              icon={<Droplets className="w-4 h-4" />} 
+              label="Concrete" 
+              value={takeoff.concreteVolumeCuYd.toFixed(1)} 
+              unit="Cu Yds"
+            />
+            <EstimateCard 
+              icon={<Box className="w-4 h-4" />} 
+              label="Total Area" 
+              value={takeoff.wallArea.toLocaleString()} 
+              unit="Sq Ft"
+            />
+            <EstimateCard 
+              icon={<TrendingUp className="w-4 h-4" />} 
+              label="Rebar" 
+              value={takeoff.totalRebarFt.toLocaleString()} 
+              unit="Lin Ft"
+            />
+          </div>
+        </section>
+
+        <div className="mt-auto pt-6">
+          <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl flex gap-3">
+            <Info className="w-5 h-5 text-emerald-500 shrink-0" />
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Estimates are based on standard 16"x48" ICF blocks. Actual site conditions and waste factors (typically 5-10%) should be considered.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel: Timelapse Visualization */}
+      <main className="flex-1 relative flex flex-col bg-zinc-950">
+        <div className="absolute inset-0 opacity-20 pointer-events-none" 
+          style={{ 
+            backgroundImage: 'radial-gradient(circle at 2px 2px, #3f3f46 1px, transparent 0)',
+            backgroundSize: '32px 32px' 
+          }} 
+        />
+
+        <div className="flex-1 flex items-center justify-center p-8 lg:p-20">
+          <div className="relative w-full max-w-4xl aspect-video bg-zinc-900/50 rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden flex items-center justify-center">
+            
+            {/* 3D-ish House Visualization */}
+            <div className="relative w-full h-full flex items-center justify-center perspective-1000">
+              <motion.div 
+                className="relative w-2/3 h-2/3 flex items-end justify-center"
+                initial={false}
+              >
+                {/* Ground / Footing */}
+                <motion.div 
+                  className="absolute bottom-0 w-full h-4 bg-amber-900 rounded-full blur-sm opacity-50"
+                  animate={{ scale: progress > 5 ? 1 : 0.8, opacity: progress > 5 ? 0.5 : 0 }}
+                />
+
+                {/* The House Structure */}
+                <div className="relative w-full h-full flex items-end justify-center gap-1">
+                  {/* Left Wall */}
+                  <WallSection progress={progress} height={height} side="left" />
+                  {/* Front Wall */}
+                  <WallSection progress={progress} height={height} side="front" />
+                  {/* Right Wall */}
+                  <WallSection progress={progress} height={height} side="right" />
+                </div>
+
+                {/* Concrete Fill Animation */}
+                {progress > 80 && (
+                  <motion.div 
+                    className="absolute inset-x-0 bottom-0 bg-zinc-400/30 backdrop-blur-sm z-20"
+                    initial={{ height: 0 }}
+                    animate={{ height: `${(progress - 80) * 5}%` }}
+                    transition={{ type: 'spring', damping: 20 }}
+                  />
+                )}
+              </motion.div>
+            </div>
+
+            {/* Stage Label Overlay */}
+            <div className="absolute top-8 left-8 flex items-center gap-4">
+              <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full animate-pulse ${currentStage.color}`} />
+                <span className="text-sm font-medium tracking-wide">{currentStage.label}</span>
+              </div>
+              <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full">
+                <span className="text-sm font-mono text-emerald-500">{progress}%</span>
+              </div>
+            </div>
+
+            {/* Construction Icons Overlay */}
+            <div className="absolute bottom-8 right-8 flex gap-2">
+              <StageIcon active={progress >= 10} icon={<Construction className="w-5 h-5" />} />
+              <StageIcon active={progress >= 30} icon={<Layers className="w-5 h-5" />} />
+              <StageIcon active={progress >= 80} icon={<Droplets className="w-5 h-5" />} />
+              <StageIcon active={progress >= 100} icon={<Home className="w-5 h-5" />} />
+            </div>
+          </div>
+        </div>
+
+        {/* Slider Controls */}
+        <div className="p-8 bg-zinc-900/50 border-t border-zinc-800 backdrop-blur-xl">
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-zinc-400">
+                <Clock className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-widest">Construction Timeline</span>
+              </div>
+              <span className="text-xs text-zinc-500">Slide to visualize build progress</span>
+            </div>
+            
+            <div className="relative h-12 flex items-center">
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={progress}
+                onChange={(e) => setProgress(Number(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+              />
+              
+              {/* Markers */}
+              <div className="absolute top-8 w-full flex justify-between px-1">
+                {[0, 25, 50, 75, 100].map((m) => (
+                  <span key={m} className="text-[10px] text-zinc-600 font-mono">{m}%</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function EstimateCard({ icon, label, value, unit }: { icon: React.ReactNode, label: string, value: string, unit: string }) {
+  return (
+    <div className="p-4 bg-zinc-800/50 border border-zinc-700/50 rounded-xl flex items-center justify-between hover:bg-zinc-800 transition-colors group">
+      <div className="flex items-center gap-3">
+        <div className="text-zinc-500 group-hover:text-emerald-500 transition-colors">
+          {icon}
+        </div>
+        <span className="text-sm text-zinc-400">{label}</span>
+      </div>
+      <div className="text-right">
+        <div className="text-lg font-bold text-zinc-100">{value}</div>
+        <div className="text-[10px] text-zinc-500 uppercase font-bold tracking-tighter">{unit}</div>
+      </div>
+    </div>
+  );
+}
+
+function StageIcon({ active, icon }: { active: boolean, icon: React.ReactNode }) {
+  return (
+    <div className={`p-3 rounded-2xl border transition-all duration-500 ${
+      active 
+        ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20 scale-110' 
+        : 'bg-zinc-800 border-zinc-700 text-zinc-600 scale-90 opacity-50'
+    }`}>
+      {icon}
+    </div>
+  );
+}
+
+function WallSection({ progress, height, side }: { progress: number, height: number, side: 'left' | 'front' | 'right' }) {
+  // Determine how many blocks to show based on progress
+  // Stages: 10-30 (1st course), 30-60 (stacking), 60-80 (full height)
+  
+  const getBlockOpacity = (row: number) => {
+    if (progress < 10) return 0;
+    if (row === 0 && progress >= 10) return 1;
+    
+    const maxRows = 8; // visual rows
+    const progressPerRow = 50 / maxRows; // 30 to 80 is 50%
+    const currentMaxRow = Math.floor((progress - 30) / progressPerRow);
+    
+    if (row <= currentMaxRow) return 1;
+    return 0;
+  };
+
+  const rotation = side === 'left' ? '-rotate-y-45' : side === 'right' ? 'rotate-y-45' : '';
+  const width = side === 'front' ? 'w-48' : 'w-32';
+
+  return (
+    <div className={`flex flex-col-reverse gap-0.5 ${width} transition-transform duration-700 ${rotation}`}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ 
+            opacity: getBlockOpacity(i),
+            scale: getBlockOpacity(i) > 0 ? 1 : 0.8,
+            y: getBlockOpacity(i) > 0 ? 0 : 10
+          }}
+          className={`h-4 w-full rounded-sm border border-zinc-900/50 flex gap-0.5 ${
+            progress >= 90 ? 'bg-zinc-400' : 'bg-zinc-600'
+          }`}
+        >
+          {/* Block segments to look like ICF */}
+          {Array.from({ length: side === 'front' ? 4 : 2 }).map((_, j) => (
+            <div key={j} className="flex-1 border-r border-zinc-900/20 last:border-0" />
+          ))}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
