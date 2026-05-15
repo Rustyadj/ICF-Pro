@@ -1,17 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Calculator, 
-  Clock, 
-  Layers, 
-  Box, 
-  Droplets, 
-  TrendingUp, 
+import { motion } from 'motion/react';
+import {
+  Calculator,
+  Clock,
+  Layers,
+  Box,
+  Droplets,
+  TrendingUp,
   Info,
-  ChevronRight,
   Home,
-  Construction
+  Construction,
+  ScanLine,
 } from 'lucide-react';
+import { FloorplanOverlay } from './FloorplanOverlay';
 
 // Constants for ICF (Standard 16" x 48" blocks)
 const BLOCK_HEIGHT_FT = 1.333; // 16 inches
@@ -30,6 +31,8 @@ export default function App() {
   const [height, setHeight] = useState<number>(10);
   const [coreSize, setCoreSize] = useState<'6' | '8' | '10'>('8');
   const [progress, setProgress] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<'timelapse' | 'floorplan'>('timelapse');
+  const [floorplanParsed, setFloorplanParsed] = useState(false);
 
   // Calculations
   const takeoff = useMemo(() => {
@@ -164,105 +167,149 @@ export default function App() {
         </div>
       </div>
 
-      {/* Right Panel: Timelapse Visualization */}
-      <main className="flex-1 relative flex flex-col bg-zinc-950">
-        <div className="absolute inset-0 opacity-20 pointer-events-none" 
-          style={{ 
+      {/* Right Panel */}
+      <main className="flex-1 relative flex flex-col bg-zinc-950 min-h-0">
+        <div className="absolute inset-0 opacity-20 pointer-events-none"
+          style={{
             backgroundImage: 'radial-gradient(circle at 2px 2px, #3f3f46 1px, transparent 0)',
-            backgroundSize: '32px 32px' 
-          }} 
+            backgroundSize: '32px 32px'
+          }}
         />
 
-        <div className="flex-1 flex items-center justify-center p-8 lg:p-20">
-          <div className="relative w-full max-w-4xl aspect-video bg-zinc-900/50 rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden flex items-center justify-center">
-            
-            {/* 3D-ish House Visualization */}
-            <div className="relative w-full h-full flex items-center justify-center perspective-1000">
-              <motion.div 
-                className="relative w-2/3 h-2/3 flex items-end justify-center"
-                initial={false}
-              >
-                {/* Ground / Footing */}
-                <motion.div 
-                  className="absolute bottom-0 w-full h-4 bg-amber-900 rounded-full blur-sm opacity-50"
-                  animate={{ scale: progress > 5 ? 1 : 0.8, opacity: progress > 5 ? 0.5 : 0 }}
-                />
+        {/* Tab bar */}
+        <div className="relative z-10 flex items-center gap-1 p-4 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
+          <TabButton
+            active={viewMode === 'timelapse'}
+            onClick={() => setViewMode('timelapse')}
+            icon={<Construction className="w-3.5 h-3.5" />}
+            label="Construction View"
+          />
+          <TabButton
+            active={viewMode === 'floorplan'}
+            onClick={() => setViewMode('floorplan')}
+            icon={<ScanLine className="w-3.5 h-3.5" />}
+            label="Floorplan Analysis"
+            badge={floorplanParsed}
+          />
+        </div>
 
-                {/* The House Structure */}
-                <div className="relative w-full h-full flex items-end justify-center gap-1">
-                  {/* Left Wall */}
-                  <WallSection progress={progress} height={height} side="left" />
-                  {/* Front Wall */}
-                  <WallSection progress={progress} height={height} side="front" />
-                  {/* Right Wall */}
-                  <WallSection progress={progress} height={height} side="right" />
+        {viewMode === 'floorplan' ? (
+          <FloorplanOverlay
+            onAnalysisComplete={(wallLengthFt, openingCount) => {
+              setLength(wallLengthFt);
+              setFloorplanParsed(true);
+            }}
+          />
+        ) : (
+          <>
+            <div className="flex-1 flex items-center justify-center p-8 lg:p-20">
+              <div className="relative w-full max-w-4xl aspect-video bg-zinc-900/50 rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden flex items-center justify-center">
+
+                {/* 3D-ish House Visualization */}
+                <div className="relative w-full h-full flex items-center justify-center perspective-1000">
+                  <motion.div
+                    className="relative w-2/3 h-2/3 flex items-end justify-center"
+                    initial={false}
+                  >
+                    <motion.div
+                      className="absolute bottom-0 w-full h-4 bg-amber-900 rounded-full blur-sm opacity-50"
+                      animate={{ scale: progress > 5 ? 1 : 0.8, opacity: progress > 5 ? 0.5 : 0 }}
+                    />
+
+                    <div className="relative w-full h-full flex items-end justify-center gap-1">
+                      <WallSection progress={progress} height={height} side="left" />
+                      <WallSection progress={progress} height={height} side="front" />
+                      <WallSection progress={progress} height={height} side="right" />
+                    </div>
+
+                    {progress > 80 && (
+                      <motion.div
+                        className="absolute inset-x-0 bottom-0 bg-zinc-400/30 backdrop-blur-sm z-20"
+                        initial={{ height: 0 }}
+                        animate={{ height: `${(progress - 80) * 5}%` }}
+                        transition={{ type: 'spring', damping: 20 }}
+                      />
+                    )}
+                  </motion.div>
                 </div>
 
-                {/* Concrete Fill Animation */}
-                {progress > 80 && (
-                  <motion.div 
-                    className="absolute inset-x-0 bottom-0 bg-zinc-400/30 backdrop-blur-sm z-20"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${(progress - 80) * 5}%` }}
-                    transition={{ type: 'spring', damping: 20 }}
+                <div className="absolute top-8 left-8 flex items-center gap-4">
+                  <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${currentStage.color}`} />
+                    <span className="text-sm font-medium tracking-wide">{currentStage.label}</span>
+                  </div>
+                  <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full">
+                    <span className="text-sm font-mono text-emerald-500">{progress}%</span>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-8 right-8 flex gap-2">
+                  <StageIcon active={progress >= 10} icon={<Construction className="w-5 h-5" />} />
+                  <StageIcon active={progress >= 30} icon={<Layers className="w-5 h-5" />} />
+                  <StageIcon active={progress >= 80} icon={<Droplets className="w-5 h-5" />} />
+                  <StageIcon active={progress >= 100} icon={<Home className="w-5 h-5" />} />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-zinc-900/50 border-t border-zinc-800 backdrop-blur-xl">
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-xs font-semibold uppercase tracking-widest">Construction Timeline</span>
+                  </div>
+                  <span className="text-xs text-zinc-500">Slide to visualize build progress</span>
+                </div>
+
+                <div className="relative h-12 flex items-center">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={progress}
+                    onChange={(e) => setProgress(Number(e.target.value))}
+                    className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
                   />
-                )}
-              </motion.div>
-            </div>
-
-            {/* Stage Label Overlay */}
-            <div className="absolute top-8 left-8 flex items-center gap-4">
-              <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full animate-pulse ${currentStage.color}`} />
-                <span className="text-sm font-medium tracking-wide">{currentStage.label}</span>
-              </div>
-              <div className="px-4 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full">
-                <span className="text-sm font-mono text-emerald-500">{progress}%</span>
+                  <div className="absolute top-8 w-full flex justify-between px-1">
+                    {[0, 25, 50, 75, 100].map((m) => (
+                      <span key={m} className="text-[10px] text-zinc-600 font-mono">{m}%</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* Construction Icons Overlay */}
-            <div className="absolute bottom-8 right-8 flex gap-2">
-              <StageIcon active={progress >= 10} icon={<Construction className="w-5 h-5" />} />
-              <StageIcon active={progress >= 30} icon={<Layers className="w-5 h-5" />} />
-              <StageIcon active={progress >= 80} icon={<Droplets className="w-5 h-5" />} />
-              <StageIcon active={progress >= 100} icon={<Home className="w-5 h-5" />} />
-            </div>
-          </div>
-        </div>
-
-        {/* Slider Controls */}
-        <div className="p-8 bg-zinc-900/50 border-t border-zinc-800 backdrop-blur-xl">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-zinc-400">
-                <Clock className="w-4 h-4" />
-                <span className="text-xs font-semibold uppercase tracking-widest">Construction Timeline</span>
-              </div>
-              <span className="text-xs text-zinc-500">Slide to visualize build progress</span>
-            </div>
-            
-            <div className="relative h-12 flex items-center">
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={progress}
-                onChange={(e) => setProgress(Number(e.target.value))}
-                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
-              />
-              
-              {/* Markers */}
-              <div className="absolute top-8 w-full flex justify-between px-1">
-                {[0, 25, 50, 75, 100].map((m) => (
-                  <span key={m} className="text-[10px] text-zinc-600 font-mono">{m}%</span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </main>
     </div>
+  );
+}
+
+function TabButton({
+  active, onClick, icon, label, badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+        active
+          ? 'bg-zinc-800 text-zinc-100 border border-zinc-700'
+          : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+      }`}
+    >
+      {icon}
+      {label}
+      {badge && (
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      )}
+    </button>
   );
 }
 
