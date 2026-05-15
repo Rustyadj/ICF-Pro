@@ -13,46 +13,46 @@ import {
   ScanLine,
 } from 'lucide-react';
 import { FloorplanOverlay } from './FloorplanOverlay';
-
-// Constants for ICF (Standard 16" x 48" blocks)
-const BLOCK_HEIGHT_FT = 1.333; // 16 inches
-const BLOCK_LENGTH_FT = 4;     // 48 inches
-const SQFT_PER_BLOCK = BLOCK_HEIGHT_FT * BLOCK_LENGTH_FT; // 5.333 sqft
-
-const CORE_THICKNESS_MAP = {
-  '6': 6 / 12, // 0.5 ft
-  '8': 8 / 12, // 0.667 ft
-  '10': 10 / 12, // 0.833 ft
-};
+import {
+  MANUFACTURERS,
+  DEFAULT_MANUFACTURER,
+  CORE_THICKNESS_FT,
+  getManufacturer,
+  type CoreSize,
+} from './data/manufacturers';
 
 export default function App() {
   // Inputs
   const [length, setLength] = useState<number>(100);
   const [height, setHeight] = useState<number>(10);
-  const [coreSize, setCoreSize] = useState<'6' | '8' | '10'>('8');
+  const [manufacturerId, setManufacturerId] = useState<string>(DEFAULT_MANUFACTURER.id);
+  const [coreSize, setCoreSize] = useState<CoreSize>('8');
   const [progress, setProgress] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'timelapse' | 'floorplan'>('timelapse');
   const [floorplanParsed, setFloorplanParsed] = useState(false);
 
+  const manufacturer = getManufacturer(manufacturerId);
+
+  // If the selected core size isn't available for the new manufacturer, reset to first available
+  const effectiveCoreSize: CoreSize = manufacturer.coreSizes.includes(coreSize)
+    ? coreSize
+    : manufacturer.coreSizes[0];
+
   // Calculations
   const takeoff = useMemo(() => {
+    const blockH = manufacturer.blockHeightIn / 12;
+    const blockL = manufacturer.blockLengthIn / 12;
+    const sqft = blockH * blockL;
     const wallArea = length * height;
-    const blockCount = Math.ceil(wallArea / SQFT_PER_BLOCK);
-    const concreteVolumeCuFt = wallArea * CORE_THICKNESS_MAP[coreSize];
+    const blockCount = Math.ceil(wallArea / sqft);
+    const concreteVolumeCuFt = wallArea * CORE_THICKNESS_FT[effectiveCoreSize];
     const concreteVolumeCuYd = concreteVolumeCuFt / 27;
-    
-    // Rough rebar estimate: horizontal every 16", vertical every 16"
-    const horizontalRuns = Math.ceil(height / BLOCK_HEIGHT_FT);
-    const verticalRuns = Math.ceil(length / 1.333); // every 16 inches
+    const horizontalRuns = Math.ceil(height / blockH);
+    const verticalRuns = Math.ceil(length / blockH);
     const totalRebarFt = (horizontalRuns * length) + (verticalRuns * height);
-
-    return {
-      wallArea,
-      blockCount,
-      concreteVolumeCuYd,
-      totalRebarFt
-    };
-  }, [length, height, coreSize]);
+    return { wallArea, blockCount, concreteVolumeCuYd, totalRebarFt };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [length, height, effectiveCoreSize, manufacturer]);
 
   // Timelapse Stage Logic
   const getStage = (p: number) => {
@@ -81,13 +81,34 @@ export default function App() {
         </header>
 
         <section className="space-y-6">
+          {/* Manufacturer selector */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-400">Manufacturer</label>
+            <select
+              value={manufacturerId}
+              onChange={(e) => {
+                const next = getManufacturer(e.target.value);
+                setManufacturerId(next.id);
+                if (!next.coreSizes.includes(coreSize)) {
+                  setCoreSize(next.coreSizes.includes('8') ? '8' : next.coreSizes[0]);
+                }
+              }}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+            >
+              {MANUFACTURERS.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500">{manufacturer.description}</p>
+          </div>
+
           <div className="space-y-4">
             <label className="block text-sm font-medium text-zinc-400">Wall Dimensions</label>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <span className="text-xs text-zinc-500">Length (ft)</span>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={length}
                   onChange={(e) => setLength(Number(e.target.value))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
@@ -95,26 +116,31 @@ export default function App() {
               </div>
               <div className="space-y-2">
                 <span className="text-xs text-zinc-500">Height (ft)</span>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={height}
                   onChange={(e) => setHeight(Number(e.target.value))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                 />
               </div>
             </div>
+            <p className="text-xs text-zinc-500">
+              Block: {manufacturer.blockHeightIn}"H × {manufacturer.blockLengthIn}"L
+              &nbsp;·&nbsp;
+              {(manufacturer.blockHeightIn / 12 * manufacturer.blockLengthIn / 12).toFixed(2)} sqft each
+            </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <label className="block text-sm font-medium text-zinc-400">Core Thickness</label>
-            <div className="flex gap-2">
-              {['6', '8', '10'].map((size) => (
+            <div className="flex gap-2 flex-wrap">
+              {manufacturer.coreSizes.map((size) => (
                 <button
                   key={size}
-                  onClick={() => setCoreSize(size as any)}
-                  className={`flex-1 py-2 rounded-lg border transition-all ${
-                    coreSize === size 
-                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' 
+                  onClick={() => setCoreSize(size)}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                    effectiveCoreSize === size
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500'
                       : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
                   }`}
                 >
